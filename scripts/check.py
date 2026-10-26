@@ -6,11 +6,8 @@ Run before pushing or opening a PR::
 
 The dev loop is just ``uv run pytest`` (fast, no coverage gate). This script is
 the enforcement layer: it fails if ruff is unhappy, formatting would change,
-mypy finds a type error, or branch coverage on ``myProject`` drops below the
-threshold below.
-
-Rename ``myProject`` -> your package's import name when starting a project from
-this template (see README "Starting a new project").
+mypy finds a type error, or branch coverage on ``alignEarthSarSeg`` drops below
+the threshold below.
 """
 
 from __future__ import annotations
@@ -20,7 +17,7 @@ import sys
 
 # Coverage target is the package import name. Find-replace when renaming the
 # package (same target as pyproject.toml `packages = [...]` and the tests).
-PACKAGE = "myProject"
+PACKAGE = "alignEarthSarSeg"
 COVERAGE_FAIL_UNDER = 90
 
 

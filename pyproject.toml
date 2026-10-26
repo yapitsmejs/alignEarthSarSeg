@@ -3,14 +3,29 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "my-project"
+name = "align-earth-sar-seg"
 version = "0.1.0"
-description = "<one-line project description>"
+description = "Ingest amplitude/complex SAR images, preprocess, run AlignEarth-SAR open-vocabulary segmentation, and return a label image."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Yap Joon Siong" }]
-dependencies = []
+dependencies = [
+    "numpy>=2.3",
+    "scipy>=1.15",
+    "image-proc-toolkit",
+    "transformers>=4.45",
+    "torch>=2.2",
+    "torchvision>=0.17",
+    "pillow>=10",
+    "huggingface-hub>=0.25",
+    "tqdm>=4.67",
+    "matplotlib>=3.8",  # runScene figures
+    # Lets Python's ssl use the OS native cert store (Windows/macOS/Linux system
+    # roots, including corporate MITM CAs absent from certifi). Injected at import
+    # so Hugging Face downloads succeed on managed hosts. No-op where unneeded.
+    "truststore>=0.10",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -20,12 +35,25 @@ dev = [
     "ruff>=0.6",
 ]
 
-# CLI entry point (uncomment if this project ships a command-line tool).
-# [project.scripts]
-# my-project = "myProject.cli:main"
+[tool.uv.sources]
+# imageProcToolkit is not on PyPI; track the latest commit on `main` of the
+# sibling repo. CI refreshes this source to true-latest main before the gate
+# (`uv sync --upgrade-package image-proc-toolkit`); the committed `uv.lock` is
+# only a last-known-good snapshot for local dev. See README + plans/developmentPlan.md.
+image-proc-toolkit = { git = "https://github.com/yapitsmejs/imageProcToolkit.git", branch = "main" }
+# CUDA builds of torch/torchvision on Windows (GPU workstations); PyPI's CPU
+# builds everywhere else, so Linux CI stays small. cu128+ (here cu130) is needed for
+# Blackwell (sm_120) GPUs.
+torch = [{ index = "pytorch-cu130", marker = "sys_platform == 'win32'" }]
+torchvision = [{ index = "pytorch-cu130", marker = "sys_platform == 'win32'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/myProject"]
+packages = ["src/alignEarthSarSeg"]
 
 [tool.ruff]
 line-length = 100
@@ -45,7 +73,7 @@ line-ending = "lf"
 [tool.mypy]
 # Enforces the "type hints required on public functions" rule from
 # CONVENTIONS.md. Scoped to the shipped package; tests are not type-checked.
-files = ["src/myProject"]
+files = ["src/alignEarthSarSeg"]
 python_version = "3.12"
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
@@ -56,9 +84,37 @@ warn_return_any = true
 no_implicit_optional = true
 show_error_codes = true
 
+# Third-party libs that ship without type stubs; silence missing-import errors
+# for them. NumPy/SciPy are fully stubbed and stay strictly checked. CuPy is
+# installed on demand by a repo-local script (not a declared dependency) and is
+# also silenced here -- see plans/developmentPlan.md.
+[[tool.mypy.overrides]]
+module = [
+    "numba",
+    "numba.*",
+    "imageProcToolkit",
+    "imageProcToolkit.*",
+    "transformers",
+    "transformers.*",
+    "tqdm",
+    "tqdm.*",
+    "cupy",
+    "cupyx.*",
+    "torchvision",
+    "torchvision.*",
+    "truststore",
+    "truststore.*",
+]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Strict, cheap, always on. Coverage is NOT measured here so the dev loop
 # (`uv run pytest`) stays fast and does not fail during red-phase work; the
 # coverage threshold is enforced by `scripts/check.py` instead.
 addopts = ["--strict-markers", "--strict-config", "-ra"]
+markers = [
+    # Tests that need network (model/checkpoint download) or a GPU. They auto-skip
+    # when the resource is absent, so the hermetic gate never downloads or builds.
+    "slow: needs network/model download or GPU",
+]
